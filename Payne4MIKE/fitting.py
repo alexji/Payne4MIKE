@@ -13,7 +13,7 @@ from . import utils
 def fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
                 NN_coeffs, wavelength_payne,\
                 RV_array=np.linspace(-1,1.,6), order_choice=[20],\
-                polynomial_order=6, bounds_set=None):
+                polynomial_order=6, bounds_set=None, rv_min=-500., rv_max=500.):
 
     '''
     Fitting MIKE spectrum
@@ -43,7 +43,8 @@ def fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
     popt_best, model_spec_best, chi_square = fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
                                                           wavelength, NN_coeffs, wavelength_payne,\
                                                           p0_initial=None, RV_prefit=True, blaze_normalized=True,\
-                                                          RV_array=RV_array, polynomial_order=2, bounds_set=bounds_set)
+                                                          RV_array=RV_array, polynomial_order=2,
+                                                          bounds_set=bounds_set, rv_min=rv_min, rv_max=rv_max)
 
     # we then fit for all the orders
     # we adopt the RV from the previous fit as the sole initialization
@@ -52,7 +53,8 @@ def fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
     popt_best, model_spec_best, chi_square = fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
                                                           wavelength, NN_coeffs, wavelength_payne,\
                                                           p0_initial=None, RV_prefit=False, blaze_normalized=True,\
-                                                          RV_array=RV_array, polynomial_order=2, bounds_set=bounds_set)
+                                                          RV_array=RV_array, polynomial_order=2,
+                                                          bounds_set=bounds_set, rv_min=rv_min, rv_max=rv_max)
 
     # using this fit, we can subtract the raw spectrum with the best fit model of the normalized spectrum
     # with which we can then estimate the continuum for the raw specturm
@@ -65,6 +67,7 @@ def fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
     popt_best, model_spec_best, chi_square = fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
                                                           wavelength, NN_coeffs, wavelength_payne,\
                                                           p0_initial=p0_initial, bounds_set=bounds_set,\
+                                                          rv_min=rv_min, rv_max=rv_max,\
                                                           RV_prefit=False, blaze_normalized=False,\
                                                           RV_array=RV_array, polynomial_order=polynomial_order)
     return popt_best, model_spec_best, chi_square
@@ -109,7 +112,7 @@ def fit_continuum(spectrum, spectrum_err, wavelength, previous_poly_fit, previou
 def fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
                  wavelength, NN_coeffs, wavelength_payne, p0_initial=None, bounds_set=None,\
                  RV_prefit=False, blaze_normalized=False, RV_array=np.linspace(-1,1.,6),\
-                 polynomial_order=2, order_choice=[20]):
+                 polynomial_order=2, order_choice=[20], rv_min=-500., rv_max=500.):
 
     '''
     Fitting MIKE spectrum
@@ -121,6 +124,7 @@ def fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
     RV_array is the range of RV that we will consider
     RV array is in the unit of 100 km/s
     order_choice is the order that we choose to fit when RV_prefit is TRUE
+    rv_min, rv_max is the minimum and maximum radial velocity allowed (default +/- 500)
 
     When blaze_normalized is True, we first normalize spectrum with the blaze
 
@@ -217,8 +221,8 @@ def fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
             bounds[1,:4] = 0.5
             bounds[0,-2] = 0.1 # vbroad
             bounds[1,-2] = 10.
-            bounds[0,-1] = -5. # RV [100 km/s]
-            bounds[1,-1] = 5.
+            bounds[0,-1] = rv_min/100. # RV [100 km/s]
+            bounds[1,-1] = rv_max/100.
         else:
             bounds[:,:4] = bounds_set[:,:4]
             bounds[:,-2:] = bounds_set[:,-2:]
