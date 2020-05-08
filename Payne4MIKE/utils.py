@@ -193,3 +193,39 @@ def transform_coefficients(popt, NN_coeffs=None):
     popt_new[-1] = popt_new[-1]*100.
     return popt_new
 
+#---------------------------------------------------------------------
+
+def initialize_coefficients(Teff, logg, FeH, aFe, polynomial_order, vbroad, rv, num_order):
+    """
+    Initialize coefficients to some value
+
+    Teff, logg, Fe/H, alpha/Fe gets normalized in this function to the proper units
+    Will raise ValueError if they are outside the bounds of the NN
+
+    Teff in K, logg in cgs dex, Fe/H and alpha/Fe in solar-normalized units
+
+    vbroad must be within 0.1-10 km/s
+    rv in units of km/s
+    """
+
+    coeff_poly = polynomial_order + 1
+    p0 = np.zeros(4 + coeff_poly*num_order + 1 + 1)
+    p0[4::coeff_poly] = 1
+    p0[5::coeff_poly] = 0
+    p0[6::coeff_poly] = 0
+    p0[-2] = vbroad
+    p0[-1] = rv/100.
+
+    NN_coeffs, dummy = read_in_neural_network()
+    w_array_0, w_array_1, w_array_2, b_array_0, b_array_1, b_array_2, x_min, x_max = NN_coeffs
+
+    p0_params = np.array([Teff/1000., logg, FeH, aFe])
+    p0_params = (p0_params - x_min)/(x_max-x_min) + 0.5
+    if not np.all((p0_params >= -0.5) & (p0_params <= 0.5)):
+        error_str = "Parameters must be within bounds:\n"
+        for i, label in enumerate(["Teff","logg","FeH","aFe"]):
+            error_str += "{} {} {}\n".format(label, x_min[i], x_max[i])
+        raise ValueError(error_str)
+
+    p0[:4] = p0_params
+    return p0
