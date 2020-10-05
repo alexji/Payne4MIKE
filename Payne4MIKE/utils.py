@@ -49,6 +49,39 @@ def read_default_model_mask():
         errors_payne[(wavelength_payne >= wmin) & (wavelength_payne <= wmax)] = 999.
     return errors_payne
 
+def read_gaia_eso_benchmark_mask(Nmask=11, thresh=0.8):
+    """
+    Constructed by Allen Marquez in Summer 2020
+    
+    Reads other_data/gaia_eso_benchmark_mask_info.pkl, which is an
+    Nthresh x Npixel array containing integers, which is the number of stars out of 22 where a pixel is masked.
+    
+    There are 22 stars from GES, and different threshold cuts for pixels to mask.
+    
+    Nmask is the number of stars needed to have a pixel masked to mask it
+    thresh is selected from 
+    thresholds = [0.05, .10, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4]
+    Larger thresholds mask fewer pixels.
+    
+    The default values performed okay on the RPA (metal-poor giants)
+    """
+    thresholds = [0.05, .10, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4]    
+    assert thresh in thresholds, thresholds
+    thresh_ix = thresholds.index(thresh)
+    
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'other_data/gaia_eso_benchmark_mask_info.pkl')
+    with open(path, "rb") as fp:
+        all_masks = pickle.load(fp)
+    assert len(thresholds) == all_masks.shape[0]
+    
+    NN_coeffs, wavelength_payne = read_in_neural_network()
+    errors_payne = np.zeros_like(wavelength_payne)
+    assert len(errors_payne) == all_masks.shape[1]
+    
+    mask = all_masks[ix,:] >= Nmask
+    errors_payne[mask] = 999.
+    return errors_payne
+
 #--------------------------------------------------------------------------------------------------------------------------
 
 def read_in_example():
