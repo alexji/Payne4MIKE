@@ -5,6 +5,7 @@ import os
 from scipy import interpolate
 from .read_spectrum import read_carpy_fits
 from . import spectral_model
+import pickle
 
 
 #=======================================================================================================================
@@ -78,7 +79,7 @@ def read_gaia_eso_benchmark_mask(Nmask=11, thresh=0.8):
     errors_payne = np.zeros_like(wavelength_payne)
     assert len(errors_payne) == all_masks.shape[1]
     
-    mask = all_masks[ix,:] >= Nmask
+    mask = all_masks[thresh_ix,:] >= Nmask
     errors_payne[mask] = 999.
     return errors_payne
 
