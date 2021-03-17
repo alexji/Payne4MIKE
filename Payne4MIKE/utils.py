@@ -26,6 +26,17 @@ def read_in_neural_network():
     '''
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'other_data/NN_normalized_spectra_float16.npz')
+    return read_in_nn_path(path)
+
+def read_in_neural_network_rpa1():
+    """ Hardcoded path for now """
+    path = "/home/aji/data1/rpa_stellarparams/rpa1_NN_normalized_spectra.npz"
+    return read_in_nn_path(path)
+
+def read_in_nn_path(path):
+    """
+    Read in NN from a specified path
+    """
     tmp = np.load(path)
     w_array_0 = tmp["w_array_0"]
     w_array_1 = tmp["w_array_1"]
