@@ -26,7 +26,9 @@ def read_in_neural_network():
     '''
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'other_data/NN_normalized_spectra_float16.npz')
-    return read_in_nn_path(path)
+    NN_coeffs, wavelength_payne = read_in_nn_path(path)
+    wavelength_payne = vac2air(wavelength_payne)
+    return NN_coeffs, wavelength_payne
 
 def read_in_neural_network_rpa1():
     """ Hardcoded path for now """
@@ -52,13 +54,14 @@ def read_in_nn_path(path):
     x_min = tmp["x_min"]
     x_max = tmp["x_max"]
     wavelength_payne = tmp["wavelength_payne"]
-    wavelength_payne = vac2air(wavelength_payne)
     NN_coeffs = (w_array_0, w_array_1, w_array_2, b_array_0, b_array_1, b_array_2, x_min, x_max)
     tmp.close()
     return NN_coeffs, wavelength_payne
 
-def read_default_model_mask():
-    NN_coeffs, wavelength_payne = read_in_neural_network()
+def read_default_model_mask(wavelength_payne=None):
+    if wavelength_payne is None:
+        NN_coeffs, wavelength_payne = read_in_neural_network()
+    
     errors_payne = np.zeros_like(wavelength_payne)
     theory_mask = np.loadtxt(os.path.join(os.path.dirname(os.path.realpath(__file__)),'other_data/theory_mask.txt'))
     for wmin, wmax in theory_mask:
@@ -310,7 +313,7 @@ def normalize_stellar_parameter_labels_rpa1(labels, NN_coeffs=None):
         NN_coeffs, dummy = read_in_neural_network_rpa1()
     w_array_0, w_array_1, w_array_2, b_array_0, b_array_1, b_array_2, x_min, x_max = NN_coeffs
     new_labels = (labels - x_min) / (x_max - x_min) - 0.5
-    assert np.all(new_labels >= -0.5), new_labels
-    assert np.all(new_labels <=  0.5), new_labels
+    assert np.all(np.round(new_labels,3) >= -0.51), (new_labels, labels)
+    assert np.all(np.round(new_labels,3) <=  0.51), (new_labels, labels)
     return new_labels
 
