@@ -46,7 +46,7 @@ class SpectralModel(object):
     num_chunk*2: number of nuisance parameters (this is the RV and vbroad)
     """
     
-    def __init__(
+    def __init__(self,
             NN_coeffs,
             num_stellar_labels,
             x_min, x_max,
@@ -76,7 +76,8 @@ class SpectralModel(object):
         
     ### Functions to define in subclasses
     @staticmethod
-    def load(self, fname):
+    def load(fname, num_order, coeff_poly=6, errors_payne=None,
+             num_chunk=1, chunk_order_min=None, chunk_order_max=None):
         """
         """
         raise NotImplementedError
@@ -187,7 +188,7 @@ class SpectralModel(object):
     # Properties of the Payne model
     @property
     def NN_coeffs(self):
-        return self.NN_coeffs
+        return self._NN_coeffs
     @property
     def num_stellar_labels(self):
         return self._num_stellar_labels
@@ -213,9 +214,13 @@ class SpectralModel(object):
     @property
     def num_chunk(self):
         return self._num_chunk
+    @property
+    def num_all_labels(self):
+        return self.num_stellar_labels + (1+self.coeff_poly)*self.num_order + 2*self.num_chunk
     
-def DefaultPayneModel(SpectralModel):
-    def load(self, fname, num_order, coeff_poly=6, errors_payne=None,
+class DefaultPayneModel(SpectralModel):
+    @staticmethod
+    def load(fname, num_order, coeff_poly=6, errors_payne=None,
              num_chunk=1, chunk_order_min=None, chunk_order_max=None):
         
         tmp = np.load(fname)
