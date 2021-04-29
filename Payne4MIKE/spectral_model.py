@@ -42,7 +42,7 @@ class SpectralModel(object):
     
     The coefficients of the model in order are:
     num_label: stellar labels (this is the trained NN)
-    num_order*(coeff_poly+1): number of polynomial coefficients (this is the continuum model)
+    num_order*(polynomial_order+1): number of polynomial coefficients (this is the continuum model)
     num_chunk*2: number of nuisance parameters (this is the RV and vbroad)
     """
     
@@ -52,7 +52,7 @@ class SpectralModel(object):
             x_min, x_max,
             wavelength_payne,
             errors_payne,
-            num_order, coeff_poly,
+            num_order, polynomial_order,
             num_chunk,
             chunk_order_min=None, chunk_order_max=None,
     ):
@@ -63,20 +63,21 @@ class SpectralModel(object):
         self._wavelength_payne = wavelength_payne
         self._errors_payne = errors_payne
         self._num_order = num_order
-        self._coeff_poly = coeff_poly
+        self._polynomial_order = polynomial_order
         self._num_chunk = num_chunk
         
-        if chunk_order_min is None:
+        if chunk_order_min is None and chunk_order_max is None:
             self.chunk_order_min = [0]
-        if chunk_order_max is None:
-            self.chunk_order_max = [num_chunk-1]
-        assert num_chunk == len(self.chunk_order_min)
-        assert num_chunk == len(self.chunk_order_max)
+            self.chunk_order_max = [self.num_order-1]
+        else:
+            self.chunk_order_min = chunk_order_min
+            self.chunk_order_max = chunk_order_max
         
-        
+        self._verify_chunks()
+
     ### Functions to define in subclasses
     @staticmethod
-    def load(fname, num_order, coeff_poly=6, errors_payne=None,
+    def load(fname, num_order, polynomial_order=6, errors_payne=None,
              num_chunk=1, chunk_order_min=None, chunk_order_max=None):
         """
         """
@@ -210,17 +211,36 @@ class SpectralModel(object):
         return self._num_order
     @property
     def coeff_poly(self):
-        return self._coeff_poly
+        return self._polynomial_order + 1
+    @property
+    def polynomial_order(self):
+        return self._polynomial_order
     @property
     def num_chunk(self):
         return self._num_chunk
     @property
     def num_all_labels(self):
-        return self.num_stellar_labels + (1+self.coeff_poly)*self.num_order + 2*self.num_chunk
+        return self.num_stellar_labels + self.coeff_poly*self.num_order + 2*self.num_chunk
     
+    ### For continuum order
+    def set_polynomial_order(self, polynomial_order):
+        self._polynomial_order = polynomial_order
+    def set_num_order(self, num_order):
+        self._num_order = num_order
+    
+    ### Internal functions
+    def _verify_chunks(self):
+        assert self.num_chunk == len(self.chunk_order_min)
+        assert self.num_chunk == len(self.chunk_order_max)
+        
+        all_orders = [np.arange(self.chunk_order_min[i], self.chunk_order_max[i]+1) for i in range(self.num_chunk)]
+        all_orders = np.concatenate(all_orders)
+        assert len(all_orders) == self.num_order
+        assert len(all_orders) == len(np.unique(all_orders))
+
 class DefaultPayneModel(SpectralModel):
     @staticmethod
-    def load(fname, num_order, coeff_poly=6, errors_payne=None,
+    def load(fname, num_order, polynomial_order=6, errors_payne=None,
              num_chunk=1, chunk_order_min=None, chunk_order_max=None):
         
         tmp = np.load(fname)
@@ -243,7 +263,7 @@ class DefaultPayneModel(SpectralModel):
         return DefaultPayneModel(
             NN_coeffs, num_stellar_labels, x_min, x_max,
             wavelength_payne, errors_payne,
-            num_order, coeff_poly, num_chunk,
+            num_order, polynomial_order, num_chunk,
             chunk_order_min=chunk_order_min,
             chunk_order_max=chunk_order_max
         )
