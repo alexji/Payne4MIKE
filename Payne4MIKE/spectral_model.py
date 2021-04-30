@@ -102,7 +102,7 @@ class SpectralModel(object):
             irv = -1 - 2*(self.num_chunk - ichunk - 1)
             popt_new[irv] = popt_new[irv]*100.
         return popt_new
-    def normalize_stellar_parameter_labels(self, labels):
+    def normalize_stellar_labels(self, labels):
         """
         Turn physical stellar parameter values into normalized values.
         """
@@ -112,6 +112,22 @@ class SpectralModel(object):
         assert np.all(np.round(new_labels,3) >= -0.51), (new_labels, labels)
         assert np.all(np.round(new_labels,3) <=  0.51), (new_labels, labels)
         return new_labels
+    def get_p0_initial_normspec(self, initial_labels):
+        """
+        Given initial labels, get p0 for optimization (assuming continuum params are all 0))
+        """
+        p0_initial = np.zeros(self.num_stellar_labels + self.coeff_poly*self.num_order + 2*self.num_chunk)
+        ## Stellar labels
+        p0_initial[0:self.num_stellar_labels] = self.normalize_stellar_labels(initial_labels)
+        ## Continuum: set each order to a constant. The other coeffs are 0.
+        p0_initial[self.num_stellar_labels::self.coeff_poly] = 1.0
+        ## vbroad/rv
+        for ichunk in range(num_chunk):
+            irv = -1 - 2*(self.num_chunk - ichunk - 1)
+            ivbroad = -2 - 2*(self.num_chunk - ichunk - 1)
+            p0_initial[ivbroad] = 0.5
+            p0_initial[irv] = np.array([popt_best[-1]])
+        return p0_initial
     
     ### The main model evaluation
     def evaluate(self, labels, wavelength, wavelength_normalized=None):
@@ -222,7 +238,7 @@ class SpectralModel(object):
     def num_all_labels(self):
         return self.num_stellar_labels + self.coeff_poly*self.num_order + 2*self.num_chunk
     
-    ### For continuum order
+    ### Setters
     def set_polynomial_order(self, polynomial_order):
         self._polynomial_order = polynomial_order
     def set_num_order(self, num_order):

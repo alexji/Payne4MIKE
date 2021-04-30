@@ -15,7 +15,8 @@ def fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
                rv_model=None,
                prefit_model=None,
                RV_array=np.linspace(-1,1.,6), order_choice=[20],\
-               polynomial_order=6, bounds_set=None,
+               default_rv_polynomial_order=2,
+               bounds_set=None,
                initial_stellar_parameters=None):
 
     '''
@@ -50,11 +51,11 @@ def fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
         rv_model = type(model)(model.NN_coeffs, model.num_stellar_labels,
                                model.x_min, model.x_max,
                                model.wavelength_payne, model.errors_payne,
-                               len(order_choice), 2, 1)
+                               len(order_choice), default_rv_polynomial_order, 1)
     popt_best, model_spec_best, chi_square = fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
-                                                          wavelength, 
-                                                          rv_model,
-                                                          p0_initial=None, RV_prefit=True, blaze_normalized=True,\
+                                                          wavelength, rv_model,
+                                                          p0_initial=None, 
+                                                          RV_prefit=True, blaze_normalized=True,\
                                                           RV_array=RV_array, bounds_set=bounds_set,\
                                                           order_choice=order_choice)
 
@@ -62,50 +63,41 @@ def fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
     # we adopt the RV from the previous fit as the sole initialization
     # the spectrum is still pre-normalized by the blaze function
     RV_array = np.array([popt_best[-1]])
-    # we adopt p0_initial from initial_stellar_parameters
-    if initial_stellar_parameters is not None:
-        normalized_stellar_parameters = utils.normalize_stellar_parameter_labels(
-            initial_stellar_parameters, NN_coeffs)
-        num_order = spectrum.shape[0]
-        coeff_poly = polynomial_order + 1
-        p0_initial = np.zeros(4 + coeff_poly*num_order + 1 + 1)
-        p0_initial[:4] = normalized_stellar_parameters
-        p0_initial[4::coeff_poly] = 1
-        p0_initial[5::coeff_poly] = 0
-        p0_initial[6::coeff_poly] = 0
-        p0_initial[-2] = 0.5
-        p0_initial[-1] = np.array([popt_best[-1]])
-    else:
-        p0_initial = None
-
     if prefit_model is None:
         ## same model, but with order 2
         prefit_model = type(model)(model.NN_coeffs, model.num_stellar_labels,
                                    model.x_min, model.x_max,
                                    model.wavelength_payne, model.errors_payne,
-                                   model.num_order, 2, model.num_chunk,
+                                   model.num_order, default_rv_polynomial_order, model.num_chunk,
                                    chunk_order_min=model.chunk_order_min,
                                    chunk_order_max=model.chunk_order_max
         )
+    if initial_stellar_parameters is not None:
+        p0_initial = model.get_p0_initial_normspec(initial_stellar_params)
+    else:
+        p0_initial = None
+
     popt_best, model_spec_best, chi_square = fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
-                                                          wavelength, 
-                                                          prefit_model,
-                                                          p0_initial=p0_initial, RV_prefit=False, blaze_normalized=True,\
+                                                          wavelength, prefit_model,
+                                                          p0_initial=p0_initial, 
+                                                          RV_prefit=False, blaze_normalized=True,\
                                                           RV_array=RV_array, bounds_set=bounds_set)
 
     # using this fit, we can subtract the raw spectrum with the best fit model of the normalized spectrum
     # with which we can then estimate the continuum for the raw specturm
     poly_initial = fit_continuum(spectrum, spectrum_err, wavelength, popt_best,\
-                                 model_spec_best, polynomial_order=model.polynomial_order,
+                                 model_spec_best, start_index=model.num_stellar_labels,
+                                 polynomial_order=model.polynomial_order,
                                  previous_polynomial_order=prefit_model.polynomial_order)
 
     # using all these as intialization, we are ready to do the final fit
     RV_array = np.array([popt_best[-1]])
-    p0_initial = np.concatenate([popt_best[:4], poly_initial.ravel(), popt_best[-2:]])
+    p0_initial = np.concatenate([popt_best[:model.num_stellar_labels],
+                                 poly_initial.ravel(),
+                                 popt_best[-2*model.num_chunk:]])
     
     popt_best, model_spec_best, chi_square = fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
-                                                          wavelength, 
-                                                          model,
+                                                          wavelength, model,
                                                           p0_initial=p0_initial, bounds_set=bounds_set,\
                                                           RV_prefit=False, blaze_normalized=False,\
                                                           RV_array=RV_array)
@@ -114,7 +106,7 @@ def fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
 #------------------------------------------------------------------------------------------
 
 def fit_continuum(spectrum, spectrum_err, wavelength, previous_poly_fit, previous_model_spec,\
-                  polynomial_order=6, previous_polynomial_order=2):
+                  start_index=4, polynomial_order=6, previous_polynomial_order=2):
 
     '''
     Fit the continuum while fixing other stellar labels
@@ -138,7 +130,7 @@ def fit_continuum(spectrum, spectrum_err, wavelength, previous_poly_fit, previou
     for k in range(wavelength_normalized.shape[0]):
         pre_poly = 0
         for m in range(pre_coeff_poly):
-            pre_poly += (wavelength_normalized[k,:]**m)*previous_poly_fit[4+m+pre_coeff_poly*k]
+            pre_poly += (wavelength_normalized[k,:]**m)*previous_poly_fit[start_index+m+pre_coeff_poly*k]
         substract_factor =  (previous_model_spec[k,:]/pre_poly) ## subtract away the previous fit
         fit_poly[k,:] = np.polyfit(wavelength_normalized[k,:], spectrum[k,:]/substract_factor,\
                                    polynomial_order, w=1./(spectrum_err[k,:]/substract_factor))[::-1]
