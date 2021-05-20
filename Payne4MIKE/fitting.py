@@ -132,8 +132,11 @@ def fit_continuum(spectrum, spectrum_err, wavelength, previous_poly_fit, previou
         for m in range(pre_coeff_poly):
             pre_poly += (wavelength_normalized[k,:]**m)*previous_poly_fit[start_index+m+pre_coeff_poly*k]
         substract_factor =  (previous_model_spec[k,:]/pre_poly) ## subtract away the previous fit
-        fit_poly[k,:] = np.polyfit(wavelength_normalized[k,:], spectrum[k,:]/substract_factor,\
-                                   polynomial_order, w=1./(spectrum_err[k,:]/substract_factor))[::-1]
+        try:
+            fit_poly[k,:] = np.polyfit(wavelength_normalized[k,:], spectrum[k,:]/substract_factor,\
+                                       polynomial_order, w=1./(spectrum_err[k,:]/substract_factor))[::-1]
+        except:
+            import pdb; pdb.set_trace()
 
     return fit_poly
 
@@ -257,42 +260,33 @@ def fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
 
     if not(RV_prefit) and not(blaze_normalized):
         print('Final Fit: Fitting the whole spectrum with all parameters simultaneously')
-        popt_for_printing = utils.transform_coefficients(p0_initial)
-        print('p0 = Teff={:.0f} logg={:.2f} FeH={:.2f} aFe={:.2f} vbroad={:.2f} rv={:.1f}'.format(
-            *[popt_for_printing[i] for i in [0,1,2,3,-2,-1]]))
+        #popt_for_printing = model.transform_coefficients(p0_initial)
+        #print('p0 = Teff={:.0f} logg={:.2f} FeH={:.2f} aFe={:.2f} vbroad={:.2f} rv={:.1f}'.format(
+        #    *[popt_for_printing[i] for i in [0,1,2,3,-2,-1]]))
+        printstr = model.get_print_string(p0_initial)
+        print('p0:',printstr)
 
     for i in range(RV_array.size):
         print(i+1, "/", RV_array.size)
 
         # initialize the parameters (Teff, logg, Fe/H, alpha/Fe, polynomial continuum, vbroad, RV)
         if p0_initial is None:
+            p0 = model.get_p0_initial_normspec(initial_rv=RV_array[i])
             ## TODO!!!!
-            p0 = np.zeros(4 + coeff_poly*num_order + 1 + 1)
-            p0[4::coeff_poly] = 1
-            p0[5::coeff_poly] = 0
-            p0[6::coeff_poly] = 0
-            p0[-2] = 0.5
-            p0[-1] = RV_array[i]
+            #p0 = np.zeros(4 + coeff_poly*num_order + 1 + 1)
+            #p0[4::coeff_poly] = 1
+            #p0[5::coeff_poly] = 0
+            #p0[6::coeff_poly] = 0
+            #p0[-2] = 0.5
+            #p0[-1] = RV_array[i]
         else:
             p0 = p0_initial
 
         # set fitting bound
-        bounds = np.zeros((2,p0.size))
-        bounds[0,4:] = -1000 # polynomial coefficients
-        bounds[1,4:] = 1000
-        if bounds_set is None:
-            bounds[0,:4] = -0.5 # teff, logg, feh, alphafe
-            bounds[1,:4] = 0.5
-            bounds[0,-2] = 0.1 # vbroad
-            bounds[1,-2] = 10.
-            bounds[0,-1] = -5. # RV [100 km/s]
-            bounds[1,-1] = 5.
-        else:
-            bounds[:,:4] = bounds_set[:,:4]
-            bounds[:,-2:] = bounds_set[:,-2:]
+        bounds = model.get_initial_bounds(bounds_set)
 
         if (not(bounds_set is None)) and (p0_initial is None):
-            p0[:4] = np.mean(bounds_set[:,:4], axis=0)
+            p0[:model.num_stellar_labels] = np.mean(bounds_set[:,:model.num_stellar_labels], axis=0)
 
         # run the optimizer
         tol = 5e-4

@@ -44,6 +44,12 @@ class SpectralModel(object):
     num_label: stellar labels (this is the trained NN)
     num_order*(polynomial_order+1): number of polynomial coefficients (this is the continuum model)
     num_chunk*2: number of nuisance parameters (this is the RV and vbroad)
+    
+    chunk_order_min and chunk_order_max specify which indices are used in each chunk.
+    The indices are inclusive.
+      Ex: if two chunks of 10 and 12 orders, it should be:
+      chunk_order_min = [0, 10]
+      chunk_order_max = [9, 21]
     """
     
     def __init__(self,
@@ -112,23 +118,57 @@ class SpectralModel(object):
         assert np.all(np.round(new_labels,3) >= -0.51), (new_labels, labels)
         assert np.all(np.round(new_labels,3) <=  0.51), (new_labels, labels)
         return new_labels
-    def get_p0_initial_normspec(self, initial_labels):
+    def get_p0_initial_normspec(self, initial_labels=None, initial_rv=0.0, initial_vbroad=0.5):
         """
-        Given initial labels, get p0 for optimization (assuming continuum params are all 0))
+        Get p0 for optimization (assuming continuum params are all 0))
         """
         p0_initial = np.zeros(self.num_stellar_labels + self.coeff_poly*self.num_order + 2*self.num_chunk)
         ## Stellar labels
-        p0_initial[0:self.num_stellar_labels] = self.normalize_stellar_labels(initial_labels)
+        if initial_labels is not None:
+            p0_initial[0:self.num_stellar_labels] = self.normalize_stellar_labels(initial_labels)
         ## Continuum: set each order to a constant. The other coeffs are 0.
         p0_initial[self.num_stellar_labels::self.coeff_poly] = 1.0
         ## vbroad/rv
-        for ichunk in range(num_chunk):
+        for ichunk in range(self.num_chunk):
             irv = -1 - 2*(self.num_chunk - ichunk - 1)
             ivbroad = -2 - 2*(self.num_chunk - ichunk - 1)
-            p0_initial[ivbroad] = 0.5
-            p0_initial[irv] = np.array([popt_best[-1]])
+            p0_initial[ivbroad] = initial_vbroad
+            p0_initial[irv] = initial_rv
         return p0_initial
-    
+    def get_initial_bounds(self, bounds_set=None,
+                           vbroadmin=0.1, vbroadmax=10,
+                           rvmin=-500, rvmax=500):
+        bounds = np.zeros((2, self.num_all_labels))
+        # polynomial coefficients
+        bounds[0,self.num_stellar_labels:] = -1000 
+        bounds[1,self.num_stellar_labels:] = 1000
+        
+        if bounds_set is None:
+            bounds[0,:self.num_stellar_labels] = -0.5
+            bounds[1,:self.num_stellar_labels] = 0.5
+            
+            for ichunk in range(self.num_chunk):
+                irv = -1 - 2*(self.num_chunk - ichunk - 1)
+                ivbroad = -2 - 2*(self.num_chunk - ichunk - 1)
+                bounds[0,ivbroad] = vbroadmin
+                bounds[1,ivbroad] = vbroadmax
+                bounds[0,irv] = rvmin/100.
+                bounds[1,irv] = rvmax/100.
+        else:
+            bounds[:,:self.num_stellar_labels] = bounds_set[:,:self.num_stellar_labels]
+            bounds[:,-2*self.num_chunk:] = bounds_set[:,-2*self.num_chunk:]
+        return bounds
+    def get_print_string(self, params):
+        pprint =  self.transform_coefficients(params)
+        spstr = f"Teff={pprint[0]:.0f} logg={pprint[1]:.2f} FeH={pprint[2]:.2f} aFe={pprint[3]:.2f}"
+        chunkstrs = []
+        for ichunk in range(self.num_chunk):
+            irv = -1 - 2*(self.num_chunk - ichunk - 1)
+            ivbroad = -2 - 2*(self.num_chunk - ichunk - 1)
+            chunkstrs.append(f"  chunk {self.chunk_order_min[ichunk]}-{self.chunk_order_max[ichunk]} rv={pprint[irv]:.1f} vbroad={pprint[ivbroad]:.1f}")
+        chunkstr = "\n".join(chunkstrs)
+        return spstr+"\n"+chunkstr
+        
     ### The main model evaluation
     def evaluate(self, labels, wavelength, wavelength_normalized=None):
         """
@@ -148,6 +188,8 @@ class SpectralModel(object):
         )
         
         # allow different RV and broadening for each chunk
+        spec_predict = np.zeros(num_order*num_pixel)
+        errs_predict = np.zeros(num_order*num_pixel) 
         for ichunk in range(self.num_chunk):
             irv = -1 - 2*(self.num_chunk - ichunk - 1)
             ivbroad = -2 - 2*(self.num_chunk - ichunk - 1)
@@ -167,15 +209,13 @@ class SpectralModel(object):
             f_errs_spec = interpolate.interp1d(self.wavelength_payne, errors_spec)
             
             # loop over all orders
-            spec_predict = np.zeros(num_order*num_pixel)
-            errs_predict = np.zeros(num_order*num_pixel)
             for k in range(self.chunk_order_min[ichunk], self.chunk_order_max[ichunk]+1):
                 scale_poly = 0
                 for m in range(self.coeff_poly):
                     scale_poly += (wavelength_normalized[k,:]**m)*labels[self.num_stellar_labels+self.coeff_poly*k+m]
                 spec_predict[k*num_pixel:(k+1)*num_pixel] = scale_poly*f_flux_spec(wavelength[k,:])
                 errs_predict[k*num_pixel:(k+1)*num_pixel] = scale_poly*f_errs_spec(wavelength[k,:])
-            
+        
         return spec_predict, errs_predict
     
     ### Generally useful static methods
@@ -251,7 +291,7 @@ class SpectralModel(object):
         
         all_orders = [np.arange(self.chunk_order_min[i], self.chunk_order_max[i]+1) for i in range(self.num_chunk)]
         all_orders = np.concatenate(all_orders)
-        assert len(all_orders) == self.num_order
+        assert len(all_orders) == self.num_order, (len(all_orders), self.num_order)
         assert len(all_orders) == len(np.unique(all_orders))
 
 class DefaultPayneModel(SpectralModel):
@@ -296,3 +336,37 @@ class DefaultPayneModel(SpectralModel):
         spectrum = np.einsum('ij,j->i', w_array_2, leaky_relu(outside)) + b_array_2
         return spectrum
         
+class DefaultMIKEModel(DefaultPayneModel):
+    @staticmethod
+    def load(fname, num_order_blue, num_order_red,
+             polynomial_order=6, errors_payne=None):
+        
+        tmp = np.load(fname)
+        w_array_0 = tmp["w_array_0"]
+        w_array_1 = tmp["w_array_1"]
+        w_array_2 = tmp["w_array_2"]
+        b_array_0 = tmp["b_array_0"]
+        b_array_1 = tmp["b_array_1"]
+        b_array_2 = tmp["b_array_2"]
+        x_min = tmp["x_min"]
+        x_max = tmp["x_max"]
+        wavelength_payne = tmp["wavelength_payne"]
+        NN_coeffs = (w_array_0, w_array_1, w_array_2, b_array_0, b_array_1, b_array_2, x_min, x_max)
+        
+        num_stellar_labels = w_array_0.shape[1]
+        
+        if errors_payne is None:
+            errors_payne = np.zeros_like(wavelength_payne)
+        
+        num_order = num_order_blue + num_order_red
+        num_chunk = 2
+        chunk_order_min = [0, num_order_blue]
+        chunk_order_max = [num_order_blue-1, num_order-1]
+        
+        return DefaultPayneModel(
+            NN_coeffs, num_stellar_labels, x_min, x_max,
+            wavelength_payne, errors_payne,
+            num_order, polynomial_order, num_chunk,
+            chunk_order_min=chunk_order_min,
+            chunk_order_max=chunk_order_max
+        )
