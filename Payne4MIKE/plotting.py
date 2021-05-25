@@ -51,15 +51,15 @@ def save_figures(name, wavelength, spectrum, spectrum_err, model_spec_best,
     assert outfname_format in ["korder","wave"], outfname_format
     model_errs = np.zeros(wavelength.shape)
     if (errors_payne is not None) and (popt_best is not None):
-        NN_coeffs, wavelength_payne = utils.read_in_neural_network()
+        #NN_coeffs, wavelength_payne = utils.read_in_neural_network()
         num_order, num_pixel = wavelength.shape
         coeff_poly = (len(popt_best) - 4 - 1 - 1) // num_order
-        model_spec = model.evaluate(popt_best, wavelength)
-        #model_errs = model_errs.reshape(wavelength.shape)
+        model_spec, model_errs = model.evaluate(popt_best, wavelength)
+        model_errs = model_errs.reshape(wavelength.shape)
 
-    #plot_err = np.sqrt(spectrum_err**2 + model_errs**2)
-    plot_err = spectrum_err
-    print(np.nanmedian(plot_err))
+    plot_err = np.sqrt(spectrum_err**2 + model_errs**2)
+    #plot_err = spectrum_err
+    #print(np.nanmedian(plot_err))
     plot_err[plot_err > 999] = 999
     
     # make plot for individual order
