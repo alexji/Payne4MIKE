@@ -73,7 +73,7 @@ def fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
                                    chunk_order_max=model.chunk_order_max
         )
     if initial_stellar_parameters is not None:
-        p0_initial = model.get_p0_initial_normspec(initial_stellar_params)
+        p0_initial = prefit_model.get_p0_initial_normspec(initial_stellar_parameters)
     else:
         p0_initial = None
 
