@@ -17,7 +17,8 @@ def fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
                RV_array=np.linspace(-1,1.,6), order_choice=[20],\
                default_rv_polynomial_order=2,
                bounds_set=None,
-               initial_stellar_parameters=None):
+               initial_stellar_parameters=None,
+               skip_rv_prefit=False):
 
     '''
     Fitting MIKE spectrum
@@ -47,22 +48,26 @@ def fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
     # first we fit for a specific order while looping over all RV initalization
     # the spectrum is pre-normalized with the blaze function
     # we assume a quadratic polynomial for the residual continuum
-    if rv_model is None:
-        rv_model = type(model)(model.NN_coeffs, model.num_stellar_labels,
-                               model.x_min, model.x_max,
-                               model.wavelength_payne, model.errors_payne,
-                               len(order_choice), default_rv_polynomial_order, 1)
-    popt_best, model_spec_best, chi_square = fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
-                                                          wavelength, rv_model,
-                                                          p0_initial=None, 
-                                                          RV_prefit=True, blaze_normalized=True,\
-                                                          RV_array=RV_array, bounds_set=bounds_set,\
-                                                          order_choice=order_choice)
+    if skip_rv_prefit:
+        RV_array = RV_array[0:1]
+        print('Pre Fit: skipping radial velocity initialization, using', str(RV_array))
+    else:
+        if rv_model is None:
+            rv_model = type(model)(model.NN_coeffs, model.num_stellar_labels,
+                                   model.x_min, model.x_max,
+                                   model.wavelength_payne, model.errors_payne,
+                                   len(order_choice), default_rv_polynomial_order, 1)
+        popt_best, model_spec_best, chi_square = fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
+                                                              wavelength, rv_model,
+                                                              p0_initial=None, 
+                                                              RV_prefit=True, blaze_normalized=True,\
+                                                              RV_array=RV_array, bounds_set=bounds_set,\
+                                                              order_choice=order_choice)
+        RV_array = np.array([popt_best[-1]])
 
     # we then fit for all the orders
     # we adopt the RV from the previous fit as the sole initialization
     # the spectrum is still pre-normalized by the blaze function
-    RV_array = np.array([popt_best[-1]])
     if prefit_model is None:
         ## same model, but with order 2
         prefit_model = type(model)(model.NN_coeffs, model.num_stellar_labels,
@@ -294,8 +299,13 @@ def fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
         #                       ydata = spectrum.ravel(), sigma = spectrum_err.ravel(),\
         #                       p0 = p0, bounds=bounds, ftol = tol, xtol = tol, absolute_sigma = True,\
         #                       method = 'trf')
-        res = least_squares(fit_func, p0,
-                            bounds=bounds, ftol=tol, xtol=tol, method='trf')
+        try:
+            res = least_squares(fit_func, p0,
+                                bounds=bounds, ftol=tol, xtol=tol, method='trf')
+        except ValueError as e:
+            print("Error: p0 = ",p0)
+            raise(e)
+
         if not res.success:
             raise RuntimeError("Optimal parameters not found: " + res.message)
         popt = res.x
