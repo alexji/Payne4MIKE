@@ -90,10 +90,10 @@ def save_figures(name, wavelength, spectrum, spectrum_err, model_spec_best,
             plt.ylim([spec_min-0.2,spec_max+0.2])
             
             # observe spectrum
-            plt.plot(wavelength[k,:], spectrum[k,:], lw=2, label="MIKE", color=cb2[0])
+            plt.plot(wavelength[k,:], spectrum[k,:], lw=2, label="Data", color=cb2[0])
             
             # best prediction
-            plt.plot(wavelength[k,:], model_spec_best[k,:], label="Kurucz", lw=2, color=cb2[1])
+            plt.plot(wavelength[k,:], model_spec_best[k,:], label="Payne", lw=2, color=cb2[1])
             
             # plotting errors
             plt.fill_between(wavelength[k,:], model_spec_best[k,:]-plot_err[k,:],\
