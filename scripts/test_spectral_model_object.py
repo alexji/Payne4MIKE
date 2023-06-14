@@ -53,43 +53,29 @@ if __name__=="__main__":
     
     print("starting fit")
     start = time.time()
-    out = fitting.fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
-                             model,
-                             RV_array = RV_array, order_choice=[4])
-    popt_best, model_spec_best, chi_square = out
+    kernel_size = 10
+    out = fitting.fit_global(kernel_size, spectrum, spectrum_err, spectrum_blaze, wavelength,
+                       model, initial_stellar_parameters=initial_stellar_labels,
+                       RV_array = RV_array, order_choice=[iorder],
+                       bounds_set=bounds)
+    popt_best, model_spec_best, chi_square, perr = out
     print("Took",time.time()-start)
     popt_print = model.transform_coefficients(popt_best)
-    print("[Teff [K], logg, vt, Fe/H, Alpha/Fe, C/Fe] = ",\
-          int(popt_print[0]*1.)/1.,\
-          int(popt_print[1]*100.)/100.,\
-          int(popt_print[2]*100.)/100.,\
-          int(popt_print[3]*100.)/100.,\
-          int(popt_print[4]*100.)/100.,\
-          int(popt_print[5]*100.)/100.,\
-    )
-    print("vbroad [km/s] = ", int(popt_print[-2]*10.)/10.)
-    print("RV [km/s] = ", int(popt_print[-1]*10.)/10.)
-    print("Chi square = ", chi_square)
     
-    print("Running with the default Payne4MIKE")
-    path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'../Payne4MIKE/other_data/NN_normalized_spectra_float16.npz')
-    model = DefaultPayneModel.load(path, num_order=num_order)
-    errors_payne = utils.read_default_model_mask(wavelength_payne=model.wavelength_payne)
-    model = DefaultPayneModel.load(path, num_order=num_order, errors_payne=errors_payne)
-    
-    print("starting fit")
-    start = time.time()
-    out = fitting.fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
-                             model,
-                             RV_array = RV_array, order_choice=[4])
-    popt_best, model_spec_best, chi_square = out
-    print("Took",time.time()-start)
-    popt_print = model.transform_coefficients(popt_best)
     print("[Teff [K], logg, Fe/H, Alpha/Fe] = ",\
-          int(popt_print[0]*1.)/1.,\
-          int(popt_print[1]*100.)/100.,\
-          int(popt_print[2]*100.)/100.,\
-          int(popt_print[3]*100.)/100.)
+    int(popt_print[0]*1.)/1.,\
+    int(popt_print[1]*100.)/100.,\
+    int(popt_print[2]*100.)/100.,\
+    int(popt_print[3]*100.)/100.,\
+    )
+    
+    print("[Teff_err [K], logg_err, Fe/H_err, Alpha/Fe_err] = ",\
+    1000*6.5*int(perr[0]*1000.)/1000.,\
+    5*int(perr[1]*10000.)/10000.,\
+    5.25*int(perr[2]*100.)/100.,\
+    0.8*int(perr[3]*100.)/100.,\
+    )
+    
     print("vbroad [km/s] = ", int(popt_print[-2]*10.)/10.)
     print("RV [km/s] = ", int(popt_print[-1]*10.)/10.)
     print("Chi square = ", chi_square)
