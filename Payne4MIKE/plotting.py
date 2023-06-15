@@ -45,7 +45,7 @@ rcParams['font.family'] = 'Bitstream Vera Sans'
 rcParams['font.size'] = 25
 rcParams['font.weight'] = 300
 
-def save_figures(name, wavelength, spectrum, spectrum_err, model_spec_best,
+def save_figures(kernel_size, name, wavelength, spectrum, spectrum_err, model_spec_best,
                  errors_payne=None, popt_best=None, model=None,
                  outdir=".", outfname_format="korder"):
     assert outfname_format in ["korder","wave"], outfname_format
@@ -54,7 +54,7 @@ def save_figures(name, wavelength, spectrum, spectrum_err, model_spec_best,
         #NN_coeffs, wavelength_payne = utils.read_in_neural_network()
         num_order, num_pixel = wavelength.shape
         coeff_poly = (len(popt_best) - 4 - 1 - 1) // num_order
-        model_spec, model_errs = model.evaluate(popt_best, wavelength)
+        model_spec, model_errs = model.evaluate(popt_best, wavelength, kernel_size)
         model_errs = model_errs.reshape(wavelength.shape)
 
     plot_err = np.sqrt(spectrum_err**2 + model_errs**2)
@@ -123,4 +123,3 @@ def save_figures(name, wavelength, spectrum, spectrum_err, model_spec_best,
             roundwave = 10 * int(np.median(wavelength[k,:]) // 10)
             plt.savefig("{}/{}_Order_{:02}_{}A.pdf".format(outdir, name, k+1, roundwave))
         plt.close()
-

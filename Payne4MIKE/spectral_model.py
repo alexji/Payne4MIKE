@@ -170,7 +170,7 @@ class SpectralModel(object):
         return spstr+"\n"+chunkstr
         
     ### The main model evaluation
-    def evaluate(self, labels, wavelength, wavelength_normalized=None):
+    def evaluate(self, labels, wavelength, kernel_size, wavelength_normalized=None):
         """
         Evaluate this model at these labels and wavelength
         """
@@ -195,10 +195,9 @@ class SpectralModel(object):
             ivbroad = -2 - 2*(self.num_chunk - ichunk - 1)
 
             # Broadening kernel
-            win = norm.pdf((np.arange(21)-10.)*(self.wavelength_payne[1]-self.wavelength_payne[0]),\
+            win = norm.pdf((np.arange(2*kernel_size+1)-kernel_size)*(self.wavelength_payne[1]-self.wavelength_payne[0]),\
                            scale=labels[ivbroad]/3e5*5000)
             win = win/np.sum(win)
-            
             # vbroad and RV
             full_spec = signal.convolve(_full_spec, win, mode='same')
             full_spec = self.doppler_shift(self.wavelength_payne, full_spec, labels[irv]*100.)
