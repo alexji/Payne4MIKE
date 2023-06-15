@@ -11,7 +11,7 @@ from . import utils
 
 #------------------------------------------------------------------------------------------
 
-def fit_global(kernel_size, spectrum, spectrum_err, spectrum_blaze, wavelength,
+def fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
                model,
                rv_model=None,
                prefit_model=None,
@@ -19,7 +19,7 @@ def fit_global(kernel_size, spectrum, spectrum_err, spectrum_blaze, wavelength,
                default_rv_polynomial_order=2,
                bounds_set=None,
                initial_stellar_parameters=None,
-               skip_rv_prefit=False, RV_range=500):
+               skip_rv_prefit=False, RV_range=500, kernel_size = 10):
 
     '''
     Fitting MIKE spectrum
