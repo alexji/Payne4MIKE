@@ -53,8 +53,7 @@ if __name__=="__main__":
     
     print("starting fit")
     start = time.time()
-    kernel_size = 10
-    out = fitting.fit_global(kernel_size, spectrum, spectrum_err, spectrum_blaze, wavelength,
+    out = fitting.fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
                        model, initial_stellar_parameters=initial_stellar_labels,
                        RV_array = RV_array, order_choice=[iorder],
                        bounds_set=bounds)
