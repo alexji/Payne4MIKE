@@ -103,7 +103,7 @@ class SpectralModel(object):
         """
         popt_new = popt.copy()
         popt_new[:self.num_stellar_labels] = (popt_new[:self.num_stellar_labels] + 0.5)*(self.x_max-self.x_min) + self.x_min
-        #popt_new[0] = popt_new[0]*1000.
+        popt_new[0] = popt_new[0]*1000.
         for ichunk in range(self.num_chunk):
             irv = -1 - 2*(self.num_chunk - ichunk - 1)
             popt_new[irv] = popt_new[irv]*100.
@@ -113,7 +113,7 @@ class SpectralModel(object):
         Turn physical stellar parameter values into normalized values.
         """
         labels = np.ravel(labels)
-        #labels[0] = labels[0]/1000.
+        labels[0] = labels[0]/1000.
         new_labels = (labels - self.x_min) / (self.x_max - self.x_min) - 0.5
         assert np.all(np.round(new_labels,3) >= -0.51), (new_labels, labels)
         assert np.all(np.round(new_labels,3) <=  0.51), (new_labels, labels)
@@ -439,8 +439,8 @@ class YYLiNLTEPayneModel(SpectralModel):
     def get_print_string(self, params):
         pprint =  self.transform_coefficients(params)
         # Teff, logg, vt, feh, c/fe, mg/fe, ca/fe and ti/fe
-        spstr1 = f"Teff={pprint[0]:.0f} logg={pprint[1]:.2f} vt={pprint[2]:.2f} FeH={pprint[3]:.2f}"
-        spstr2 = f"CFe={pprint[4]:.2f} MgFe={pprint[5]:.2f} CaFe={pprint[6]:.2f} TiFe={pprint[7]:.2f}"
+        spstr1 = f"Teff={pprint[0]:.0f} logg={pprint[1]:.2f} vt={pprint[2]:.2f} FeH={pprint[3]:+.2f}"
+        spstr2 = f"CFe={pprint[4]:+.2f} MgFe={pprint[5]:+.2f} CaFe={pprint[6]:+.2f} TiFe={pprint[7]:+.2f}"
         spstr = f"{spstr1}\n{spstr2}"
         chunkstrs = []
         for ichunk in range(self.num_chunk):
@@ -449,4 +449,24 @@ class YYLiNLTEPayneModel(SpectralModel):
             chunkstrs.append(f"  chunk {self.chunk_order_min[ichunk]}-{self.chunk_order_max[ichunk]} rv={pprint[irv]:.1f} vbroad={pprint[ivbroad]:.1f}")
         chunkstr = "\n".join(chunkstrs)
         return spstr+"\n"+chunkstr
+
+    def transform_coefficients(self, popt):
+        """
+        Transform coefficients into human-readable
+        """
+        popt_new = popt.copy()
+        popt_new[:self.num_stellar_labels] = (popt_new[:self.num_stellar_labels] + 0.5)*(self.x_max-self.x_min) + self.x_min
+        for ichunk in range(self.num_chunk):
+            irv = -1 - 2*(self.num_chunk - ichunk - 1)
+            popt_new[irv] = popt_new[irv]*100.
+        return popt_new
+    def normalize_stellar_labels(self, labels):
+        """
+        Turn physical stellar parameter values into normalized values.
+        """
+        labels = np.ravel(labels)
+        new_labels = (labels - self.x_min) / (self.x_max - self.x_min) - 0.5
+        assert np.all(np.round(new_labels,3) >= -0.51), (new_labels, labels)
+        assert np.all(np.round(new_labels,3) <=  0.51), (new_labels, labels)
+        return new_labels
 
