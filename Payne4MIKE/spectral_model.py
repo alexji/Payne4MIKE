@@ -370,3 +370,83 @@ class DefaultMIKEModel(DefaultPayneModel):
             chunk_order_min=chunk_order_min,
             chunk_order_max=chunk_order_max
         )
+
+class YYLiNLTEPayneModel(SpectralModel):
+    @staticmethod
+    def load(fname, num_order, polynomial_order=6, errors_payne=None,
+             num_chunk=1, chunk_order_min=None, chunk_order_max=None):
+        
+        tmp = np.load(fname)
+        w_array_0 = tmp["w_array_0"]
+        w_array_1 = tmp["w_array_1"]
+        w_array_2 = tmp["w_array_2"]
+        b_array_0 = tmp["b_array_0"]
+        b_array_1 = tmp["b_array_1"]
+        b_array_2 = tmp["b_array_2"]
+        x_min = tmp["x_min"]
+        x_max = tmp["x_max"]
+        wavelength_payne = tmp["wavelength_payne"]
+        NN_coeffs = (w_array_0, w_array_1, w_array_2, b_array_0, b_array_1, b_array_2, x_min, x_max)
+        
+        num_stellar_labels = w_array_0.shape[1]
+        # Teff, logg, vt, feh, c/fe, mg/fe, ca/fe and ti/fe
+        
+        if errors_payne is None:
+            errors_payne = np.zeros_like(wavelength_payne)
+        
+        return YYLiNLTEPayneModel(
+            NN_coeffs, num_stellar_labels, x_min, x_max,
+            wavelength_payne, errors_payne,
+            num_order, polynomial_order, num_chunk,
+            chunk_order_min=chunk_order_min,
+            chunk_order_max=chunk_order_max
+        )
+
+
+    def get_spectrum_from_neural_net(self, scaled_labels):
+        """
+        Predict the rest-frame spectrum (normalized) of a single star.
+        We input the scaled stellar labels (not in the original unit).
+        Each label ranges from -0.5 to 0.5
+        """
+
+        # assuming your NN has two hidden layers.
+        w_array_0, w_array_1, w_array_2, b_array_0, b_array_1, b_array_2, x_min, x_max = self.NN_coeffs
+        inside = np.einsum('ij,j->i', w_array_0, scaled_labels) + b_array_0
+        outside = np.einsum('ij,j->i', w_array_1, leaky_relu(inside)) + b_array_1
+        spectrum = np.einsum('ij,j->i', w_array_2, sigmoid(outside)) + b_array_2
+        return sigmoid(spectrum)
+    
+    ### TODO:
+    ### Functions with default behavior you may want to redefine
+    def get_p0_initial_normspec(self, initial_labels=None, initial_rv=0.0, initial_vbroad=0.5):
+        """
+        Get p0 for optimization (assuming continuum params are all 0))
+        """
+        p0_initial = np.zeros(self.num_stellar_labels + self.coeff_poly*self.num_order + 2*self.num_chunk)
+        ## Stellar labels
+        if initial_labels is not None:
+            p0_initial[0:self.num_stellar_labels] = self.normalize_stellar_labels(initial_labels)
+        ## Continuum: set each order to a constant. The other coeffs are 0.
+        p0_initial[self.num_stellar_labels::self.coeff_poly] = 1.0
+        ## vbroad/rv
+        for ichunk in range(self.num_chunk):
+            irv = -1 - 2*(self.num_chunk - ichunk - 1)
+            ivbroad = -2 - 2*(self.num_chunk - ichunk - 1)
+            p0_initial[ivbroad] = initial_vbroad
+            p0_initial[irv] = initial_rv
+        return p0_initial
+    def get_print_string(self, params):
+        pprint =  self.transform_coefficients(params)
+        # Teff, logg, vt, feh, c/fe, mg/fe, ca/fe and ti/fe
+        spstr1 = f"Teff={pprint[0]:.0f} logg={pprint[1]:.2f} vt={pprint[2]:.2f} FeH={pprint[3]:.2f}"
+        spstr2 = f"CFe={pprint[4]:.2f} MgFe={pprint[5]:.2f} CaFe={pprint[6]:.2f} TiFe={pprint[7]:.2f}"
+        spstr = f"{spstr1}\n{spstr2}"
+        chunkstrs = []
+        for ichunk in range(self.num_chunk):
+            irv = -1 - 2*(self.num_chunk - ichunk - 1)
+            ivbroad = -2 - 2*(self.num_chunk - ichunk - 1)
+            chunkstrs.append(f"  chunk {self.chunk_order_min[ichunk]}-{self.chunk_order_max[ichunk]} rv={pprint[irv]:.1f} vbroad={pprint[ivbroad]:.1f}")
+        chunkstr = "\n".join(chunkstrs)
+        return spstr+"\n"+chunkstr
+
