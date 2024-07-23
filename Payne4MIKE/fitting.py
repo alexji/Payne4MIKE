@@ -1,6 +1,7 @@
 # code for fitting spectra, using the models in spectral_model.py
 from __future__ import absolute_import, division, print_function # python2 compatibility
 import numpy as np
+import sys
 from scipy.optimize import curve_fit, least_squares
 from scipy import interpolate
 from scipy import signal
@@ -51,6 +52,7 @@ def fit_global(spectrum, spectrum_err, spectrum_blaze, wavelength,
     if skip_rv_prefit:
         RV_array = RV_array[0:1]
         print('Pre Fit: skipping radial velocity initialization, using', str(RV_array))
+        sys.stdout.flush()
     else:
         if rv_model is None:
             rv_model = type(model)(model.NN_coeffs, model.num_stellar_labels,
@@ -124,6 +126,7 @@ def fit_continuum(spectrum, spectrum_err, wavelength, previous_poly_fit, previou
     '''
 
     print('Pre Fit: Finding the best continuum initialization')
+    sys.stdout.flush()
 
     # normalize wavelength grid
     wavelength_normalized = utils.whitten_wavelength(wavelength)*100.
@@ -191,6 +194,7 @@ def evaluate_model(labels, NN_coeffs, wavelength_payne, errors_payne, coeff_poly
 
 def fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
                  wavelength, model, \
+                 get_perr=False,
                  p0_initial=None, bounds_set=None,\
                  RV_prefit=False, blaze_normalized=False, RV_array=np.linspace(-1,1.,6),\
                  order_choice=[20], RV_range=500, max_poly_coeff=1000):
@@ -274,6 +278,7 @@ def fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
         #    *[popt_for_printing[i] for i in [0,1,2,3,-2,-1]]))
         printstr = model.get_print_string(p0_initial)
         print('p0:',printstr)
+    sys.stdout.flush()
 
     for i in range(RV_array.size):
         print(i+1, "/", RV_array.size)
@@ -314,11 +319,20 @@ def fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
             bad = np.array([np.logical_or(_p0 < _b0, _p0 > _b1) for _p0, _b0, _b1 in zip(p0, bounds[0], bounds[1])])
             for ix in np.where(bad)[0]:
                 print("ix",ix,"p0",p0[ix],"pmin",bounds[0][ix],"pmax",bounds[1][ix])
+            sys.stdout.flush()
             raise(e)
 
         if not res.success:
             raise RuntimeError("Optimal parameters not found: " + res.message)
         popt = res.x
+
+        if get_perr:
+            # see https://stackoverflow.com/questions/42388139/how-to-compute-standard-deviation-errors-with-scipy-optimize-least-squares
+            U, s, Vh = linalg.svd(res.jac, full_matrices=False)
+            tol = np.finfo(float).eps*s[0]*max(res.jac.shape)
+            w = s > tol
+            cov = (Vh[w].T/s[w]**2) @ Vh[w]  # robust covariance matrix
+            perr = np.sqrt(np.diag(cov))     # 1sigma uncertainty on fitted parameters
 
         # calculate chi^2
         model_spec, model_errs = model.evaluate(popt, wavelength, wavelength_normalized)
@@ -333,4 +347,6 @@ def fitting_mike(spectrum, spectrum_err, spectrum_blaze,\
             model_spec_best = model_spec
             popt_best = popt
 
+    if get_perr:
+        return popt_best, model_spec_best.reshape(num_order,num_pixel), chi_2, perr
     return popt_best, model_spec_best.reshape(num_order,num_pixel), chi_2
